@@ -33,23 +33,22 @@ print('[', datetime.datetime.now(), '] Connecting to ', host, ' on port ', port)
 #Tweepy twitter stream code is from https://pythonprogramming.net/twitter-api-streaming-tweets-python-tutorial/
 
 class listener(StreamListener):
-    
+
     def on_data(self, data):
         try:
             tweet = data.split(',"text":"')[1].split('","source')[0]
             tweet = str(tweet.split('\"')[1])
             print('[', datetime.datetime.now(), '] New Question:', tweet)
-            
+
             #get encryption key and encrypt encoded question
             cryptKey = Fernet.generate_key()
             f = Fernet(cryptKey)
             qEncoded = tweet.encode()
             qEncrypted = f.encrypt(qEncoded)
-            
+
             #get hash checksum of encrypted question
             md5Hash = hashlib.md5(qEncrypted).digest()
-            
-            print('Orig Hash: ', md5Hash)
+
             print('[', datetime.datetime.now(), '] Encrypt: Generated Key: ', cryptKey, ' Cipher text: ', qEncrypted)
 
             qPayload = (
@@ -57,43 +56,44 @@ class listener(StreamListener):
                 qEncrypted,
                 md5Hash
             )
-            
+
             #pickling time
             qPayload = pickle.dumps(qPayload)
-            
+
             #sending data
             print('[', datetime.datetime.now(), '] Sending data: ', qPayload)
             s.send(qPayload)
-            
+
             #receiving data
             aPayload = s.recv(size)
             print('[', datetime.datetime.now(), '] Received data: ', aPayload)
-            
+
             #unpickle
             aPayload = pickle.loads(aPayload)
-            
+
             #verifying hash
             verify_hash = hashlib.md5(aPayload[0]).digest()
-            
+
             if verify_hash != aPayload[1]:
                 print('[', datetime.datetime.now(), '] Checksums do not match for answer!')
-            
+
+            #decrypt data
             aDecrypted = f.decrypt(aPayload[0])
             aDecoded = aDecrypted.decode()
-            
+
             print('[', datetime.datetime.now(), '] Decrypt: Using Key: ', cryptKey, ' | Plain text: ', aDecoded)
-            
+
             #IBM watson speaking the answer
-            
+
             return True
-        
+
         except BaseException as e:
             print('failed on_data,', str(e))
             time.sleep(5)
-    
+
     def on_error(self, status):
         print(status)
-        
+
 auth = OAuthHandler(ClientKeys.twitterCKey, ClientKeys.twitterCSecret)
 auth.set_access_token(ClientKeys.twitterAToken, ClientKeys.twitterATokenSecret)
 twitterStream = Stream(auth, listener())
