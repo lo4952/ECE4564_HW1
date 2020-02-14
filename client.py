@@ -45,9 +45,11 @@ class listener(StreamListener):
             f = Fernet(cryptKey)
             qEncoded = tweet.encode()
             qEncrypted = f.encrypt(qEncoded)
-            #get hash checksum of encrypted question
-            md5Hash = str(hashlib.md5(qEncrypted))
             
+            #get hash checksum of encrypted question
+            md5Hash = hashlib.md5(qEncrypted).digest()
+            
+            print('Orig Hash: ', md5Hash)
             print('[', datetime.datetime.now(), '] Encrypt: Generated Key: ', cryptKey, ' Cipher text: ', qEncrypted)
 
             qPayload = (
@@ -55,7 +57,7 @@ class listener(StreamListener):
                 qEncrypted,
                 md5Hash
             )
-
+            
             #pickling time
             qPayload = pickle.dumps(qPayload)
             
@@ -71,8 +73,10 @@ class listener(StreamListener):
             aPayload = pickle.loads(aPayload)
             
             #verifying hash
-            if str(hashlib.md5(aPayload[1])) != aPayload[0]:
-                print('Checksums do not match!')
+            verify_hash = hashlib.md5(aPayload[0]).digest()
+            
+            if verify_hash != aPayload[1]:
+                print('[', datetime.datetime.now(), '] Checksums do not match for answer!')
             
             aDecrypted = f.decrypt(aPayload[0])
             aDecoded = aDecrypted.decode()
