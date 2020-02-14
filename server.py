@@ -1,24 +1,24 @@
 #!/usr/bin/env python3
-# Requires PyAudio, wolframalpha
+# Requires PyAudio, wolframalpha, cryptography
+
 from ServerKeys import apikey, url, app_id
 
 from ibm_watson import TextToSpeechV1
 from ibm_watson.websocket import SynthesizeCallback
-import pyaudio
-import wolframalpha
+import sys, pyaudio, socket, wolframalpha, hashlib, cryptography, pickle, time
 from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
+from cryptography.fernet import Fernet
 
 authenticator = IAMAuthenticator(apikey)
 service = TextToSpeechV1(authenticator=authenticator)
 service.set_service_url(url)
 
-query_text = "What is the distance to the moon in kilometers?"
+def get_answer(query_text):
+	client = wolframalpha.Client(app_id)
+	res = client.query(query_text)
+	answer = next(res.results).text 
+	return answer
 
-client = wolframalpha.Client(app_id)
-res = client.query('query_text')
-result_text = 
-
-"""
 class Play(object):
     # Wrapper to play the audio in a blocking mode
     def __init__(self):
@@ -66,10 +66,12 @@ class MySynthesizeCallback(SynthesizeCallback):
         self.play.start_streaming()
 
     def on_error(self, error):
-        print('Error received: {}'.format(error))
+    	pass
+        #print('Error received: {}'.format(error))
 
     def on_timing_information(self, timing_information):
-        print(timing_information)
+    	pass
+        #print(timing_information)
 
     def on_audio_stream(self, audio_stream):
         self.play.write_stream(audio_stream)
@@ -80,10 +82,43 @@ class MySynthesizeCallback(SynthesizeCallback):
 
 test_callback = MySynthesizeCallback()
 
-service.synthesize_using_websocket(query_text,
-                                   test_callback,
-                                   accept='audio/wav',
-                                   voice="en-US_AllisonVoice"
-                                  )
+TCP_IP = ''
+TCP_PORT = int(sys.argv[2]) # get from command line
+BUFFER_SIZE = int(sys.argv[4]) # get from command line
 
-"""
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+ts = time.gmtime()
+str_time = (time.strftime("%Y-%m-%d %H:%M:%S", ts))
+print("[" + str_time + "] Created Socket at " + sys.argv[2] + " on port " + sys.argv[4])
+
+s.bind((TCP_IP, TCP_PORT))
+s.listen(1)
+
+ts = time.gmtime()
+str_time = (time.strftime("%Y-%m-%d %H:%M:%S", ts))
+print("[" + str_time + "] Listening for client connections")
+
+conn, addr = s.accept()
+while 1:
+	pickle_tuple = conn.recv(BUFFER_SIZE)
+	if not pickle_tuple: break
+
+	data_tuple = pickle.loads(pickle_tuple)
+	f = Fernet(data_tuple[0])
+	query_text = f.decrypt(data_tuple[1]) # decrypted second element
+	query_str = query_text.decode()
+
+	print(query_str)
+	service.synthesize_using_websocket(query_str, test_callback, accept='audio/wav', voice="en-US_AllisonVoice")
+
+	answer_text = get_answer(query_str)
+	answer_text = answer_text.encode() 
+	encrypted_answer_text = f.encrypt(answer_text) 
+	answer_hash = str(hashlib.md5(encrypted_answer_text))
+
+	answer_payload = (encrypted_answer_text, answer_hash)
+	answer_payload = pickle.dumps(answer_payload) # pickle outgoing tuple
+	print(answer_text)
+	conn.send(answer_payload)  # send back answer
+conn.close()
