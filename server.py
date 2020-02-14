@@ -1,20 +1,26 @@
 #!/usr/bin/env python3
-# Requires PyAudio
-from ServerKeys import apikey, url
+# Requires PyAudio, wolframalpha
+from ServerKeys import apikey, url, app_id
 
 from ibm_watson import TextToSpeechV1
 from ibm_watson.websocket import SynthesizeCallback
 import pyaudio
+import wolframalpha
 from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
 
 authenticator = IAMAuthenticator(apikey)
 service = TextToSpeechV1(authenticator=authenticator)
 service.set_service_url(url)
 
+query_text = "What is the distance to the moon in kilometers?"
+
+client = wolframalpha.Client(app_id)
+res = client.query('query_text')
+result_text = 
+
+"""
 class Play(object):
-    """
-    Wrapper to play the audio in a blocking mode
-    """
+    # Wrapper to play the audio in a blocking mode
     def __init__(self):
         self.format = pyaudio.paInt16
         self.channels = 1
@@ -74,10 +80,10 @@ class MySynthesizeCallback(SynthesizeCallback):
 
 test_callback = MySynthesizeCallback()
 
-my_text = "This is a test of the IBM  Watson text-to-speech"
-
-service.synthesize_using_websocket(my_text,
+service.synthesize_using_websocket(query_text,
                                    test_callback,
                                    accept='audio/wav',
                                    voice="en-US_AllisonVoice"
                                   )
+
+"""
