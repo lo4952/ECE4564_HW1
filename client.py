@@ -1,28 +1,23 @@
 #!/usr/bin/env python3
 
-import pickle
-import socket
+#TODO get url from serverKeys and put in ClientKeys
+from ClientKeys import apikeyWatson, urlWatson, twitterCKey, twitterCSecret, twitterAToken, twitterATokenSecret
+
 from tweepy import Stream
 from tweepy import OAuthHandler
 from tweepy.streaming import StreamListener
-import datetime
-import argparse
-import ClientKeys
-from cryptography.fernet import Fernet
-import hashlib
-#Reuse authentication from ServerKeys sine I'm too lazy to make my own separate file.
-from ServerKeys import apikey, url
-#If necessary my own API key is below:
-#hRO4rFm_4RC41TDlqF8Xa7D9nUg2VgJZ0yBuwXuDcjFY
 
 from ibm_watson import TextToSpeechV1
 from ibm_watson.websocket import SynthesizeCallback
 import pyaudio
 from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
 
-authenticator = IAMAuthenticator(apikey)
-service = TextToSpeechV1(authenticator=authenticator)
-service.set_service_url(url)
+import datetime
+import argparse
+import pickle
+import socket
+from cryptography.fernet import Fernet
+import hashlib
 
 #watson related classes, courtesy of watson developer cloud
 class Play(object):
@@ -83,24 +78,6 @@ class MySynthesizeCallback(SynthesizeCallback):
         print('Completed synthesizing')
         self.play.complete_playing()
 
-#parse arguments and assign to appropriate variables
-parser = argparse.ArgumentParser(description='client arguments')
-
-parser.add_argument("-sip", default="192.168.0.1", type=str, help="Server IP address")
-parser.add_argument("-sp", default=0, type=int, help="Server Port")
-parser.add_argument("-z", default=1024, type=int, help="Size of the socket")
-
-args = parser.parse_args()
-
-host = args.sip
-port = args.sp
-size = args.z
-
-#connecting client to host server
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s.connect((host,port))
-print('[', datetime.datetime.now(), '] Connecting to ', host, ' on port ', port)
-
 #twitter stream
 #Tweepy twitter stream code is from https://pythonprogramming.net/twitter-api-streaming-tweets-python-tutorial/
 
@@ -109,7 +86,8 @@ class listener(StreamListener):
     def on_data(self, data):
         try:
             tweet = data.split(',"text":"')[1].split('","source')[0]
-            tweet = str(tweet.split('\"')[1])
+            tweet = str(tweet.split('\"')[1].split('?')[0])
+            tweet = tweet + '?'
             print('[', datetime.datetime.now(), '] New Question:', tweet)
 
             #get encryption key and encrypt encoded question
@@ -157,8 +135,8 @@ class listener(StreamListener):
 
             #IBM watson speaking the answer
             test_callback = MySynthesizeCallback()
-            service.synthesize_using_websocket(aDecrypted,test_callback,accept='audio/wav',voice="en-US_AllisonVoice")
-
+            service.synthesize_using_websocket(aDecoded,test_callback,accept='audio/wav',voice="en-US_AllisonVoice")
+            print('[', datetime.datetime.now(), '] Speaking Answer: ', aDecoded)
 
             return True
 
@@ -169,8 +147,31 @@ class listener(StreamListener):
     def on_error(self, status):
         print(status)
 
-auth = OAuthHandler(ClientKeys.twitterCKey, ClientKeys.twitterCSecret)
-auth.set_access_token(ClientKeys.twitterAToken, ClientKeys.twitterATokenSecret)
+#parse arguments and assign to appropriate variables
+parser = argparse.ArgumentParser(description='client arguments')
+
+parser.add_argument("-sip", default="192.168.0.1", type=str, help="Server IP address")
+parser.add_argument("-sp", default=0, type=int, help="Server Port")
+parser.add_argument("-z", default=1024, type=int, help="Size of the socket")
+
+args = parser.parse_args()
+host = args.sip
+port = args.sp
+size = args.z
+
+#IBM watson setup
+authenticator = IAMAuthenticator(apikeyWatson)
+service = TextToSpeechV1(authenticator=authenticator)
+service.set_service_url(urlWatson)
+
+#connecting client to host server
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.connect((host,port))
+print('[', datetime.datetime.now(), '] Connecting to ', host, ' on port ', port)
+
+#twitter action
+auth = OAuthHandler(twitterCKey, twitterCSecret)
+auth.set_access_token(twitterAToken, twitterATokenSecret)
 twitterStream = Stream(auth, listener())
 print('[', datetime.datetime.now(), '] Listening for tweets from Twitter API that contain questions.')
 twitterStream.filter(track=["#ECE4564T20"])
