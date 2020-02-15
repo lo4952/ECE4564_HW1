@@ -77,7 +77,7 @@ while 1:
 	str_time = get_time()
 	print("[" + str_time + "] Speaking Question: ", query_str)
 
-    text_talker.say(query_str)
+	text_talker.say(query_str)
 
 	str_time = get_time()
 	print("[" + str_time + "] Sending question to Wolframalpha: ", query_str)

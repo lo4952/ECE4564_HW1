@@ -25,6 +25,11 @@ import os, time
 
 from random import randrange
 
+os.putenv('DISPLAY', ':0.0')
+pygame.init()
+pygame.display.set_mode((1, 1))
+
+
 class TT_Config:
 
     # Username & Password combination not in use anymore
