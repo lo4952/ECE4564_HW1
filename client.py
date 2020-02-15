@@ -10,6 +10,78 @@ import argparse
 import ClientKeys
 from cryptography.fernet import Fernet
 import hashlib
+#Reuse authentication from ServerKeys sine I'm too lazy to make my own separate file.
+from ServerKeys import apikey, url
+#If necessary my own API key is below:
+#hRO4rFm_4RC41TDlqF8Xa7D9nUg2VgJZ0yBuwXuDcjFY
+
+from ibm_watson import TextToSpeechV1
+from ibm_watson.websocket import SynthesizeCallback
+import pyaudio
+from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
+
+authenticator = IAMAuthenticator(apikey)
+service = TextToSpeechV1(authenticator=authenticator)
+service.set_service_url(url)
+
+#watson related classes, courtesy of watson developer cloud
+class Play(object):
+    def __init__(self):
+        self.format = pyaudio.paInt16
+        self.channels = 1
+        self.rate = 22050
+        self.chunk = 1024
+        self.pyaudio = None
+        self.stream = None
+
+    def start_streaming(self):
+        self.pyaudio = pyaudio.PyAudio()
+        self.stream = self._open_stream()
+        self._start_stream()
+
+    def _open_stream(self):
+        stream = self.pyaudio.open(
+            format=self.format,
+            channels=self.channels,
+            rate=self.rate,
+            output=True,
+            frames_per_buffer=self.chunk,
+            start=False
+        )
+        return stream
+
+    def _start_stream(self):
+        self.stream.start_stream()
+
+    def write_stream(self, audio_stream):
+        self.stream.write(audio_stream)
+
+    def complete_playing(self):
+        self.stream.stop_stream()
+        self.stream.close()
+        self.pyaudio.terminate()
+
+class MySynthesizeCallback(SynthesizeCallback):
+    def __init__(self):
+        SynthesizeCallback.__init__(self)
+        self.play = Play()
+
+    def on_connected(self):
+        print('Opening stream to play')
+        self.play.start_streaming()
+
+    def on_error(self, error):
+        print('Error received: {}'.format(error))
+
+    def on_timing_information(self, timing_information):
+        print(timing_information)
+
+    def on_audio_stream(self, audio_stream):
+        self.play.write_stream(audio_stream)
+
+    def on_close(self):
+        print('Completed synthesizing')
+        self.play.complete_playing()
 
 #parse arguments and assign to appropriate variables
 parser = argparse.ArgumentParser(description='client arguments')
@@ -84,6 +156,9 @@ class listener(StreamListener):
             print('[', datetime.datetime.now(), '] Decrypt: Using Key: ', cryptKey, ' | Plain text: ', aDecoded)
 
             #IBM watson speaking the answer
+            test_callback = MySynthesizeCallback()
+            service.synthesize_using_websocket(aDecrypted,test_callback,accept='audio/wav',voice="en-US_AllisonVoice")
+
 
             return True
 
