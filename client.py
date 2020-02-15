@@ -1,16 +1,10 @@
 #!/usr/bin/env python3
 
-#TODO get url from serverKeys and put in ClientKeys
 from ClientKeys import apikeyWatson, urlWatson, twitterCKey, twitterCSecret, twitterAToken, twitterATokenSecret
 
 from tweepy import Stream
 from tweepy import OAuthHandler
 from tweepy.streaming import StreamListener
-
-from ibm_watson import TextToSpeechV1
-from ibm_watson.websocket import SynthesizeCallback
-import pyaudio
-from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
 
 import datetime
 import argparse
@@ -19,64 +13,8 @@ import socket
 from cryptography.fernet import Fernet
 import hashlib
 
-#watson related classes, courtesy of watson developer cloud
-class Play(object):
-    def __init__(self):
-        self.format = pyaudio.paInt16
-        self.channels = 1
-        self.rate = 22050
-        self.chunk = 1024
-        self.pyaudio = None
-        self.stream = None
-
-    def start_streaming(self):
-        self.pyaudio = pyaudio.PyAudio()
-        self.stream = self._open_stream()
-        self._start_stream()
-
-    def _open_stream(self):
-        stream = self.pyaudio.open(
-            format=self.format,
-            channels=self.channels,
-            rate=self.rate,
-            output=True,
-            frames_per_buffer=self.chunk,
-            start=False
-        )
-        return stream
-
-    def _start_stream(self):
-        self.stream.start_stream()
-
-    def write_stream(self, audio_stream):
-        self.stream.write(audio_stream)
-
-    def complete_playing(self):
-        self.stream.stop_stream()
-        self.stream.close()
-        self.pyaudio.terminate()
-
-class MySynthesizeCallback(SynthesizeCallback):
-    def __init__(self):
-        SynthesizeCallback.__init__(self)
-        self.play = Play()
-
-    def on_connected(self):
-        print('Opening stream to play')
-        self.play.start_streaming()
-
-    def on_error(self, error):
-        print('Error received: {}'.format(error))
-
-    def on_timing_information(self, timing_information):
-        print(timing_information)
-
-    def on_audio_stream(self, audio_stream):
-        self.play.write_stream(audio_stream)
-
-    def on_close(self):
-        print('Completed synthesizing')
-        self.play.complete_playing()
+# watson text to talk API library from https://github.com/ziligy/watson-text-talker (slightly modified to work for us)
+from watson_text_talker import *
 
 #twitter stream
 #Tweepy twitter stream code is from https://pythonprogramming.net/twitter-api-streaming-tweets-python-tutorial/
@@ -88,7 +26,7 @@ class listener(StreamListener):
             tweet = data.split(',"text":"')[1].split('","source')[0]
             tweet = str(tweet.split('\"')[1].split('?')[0])
             tweet = tweet + '?'
-            print('[', datetime.datetime.now(), '] New Question:', tweet)
+            print('[', datetime.datetime.now(), ' | Checkpoint 03] New Question:', tweet)
 
             #get encryption key and encrypt encoded question
             cryptKey = Fernet.generate_key()
@@ -99,7 +37,7 @@ class listener(StreamListener):
             #get hash checksum of encrypted question
             md5Hash = hashlib.md5(qEncrypted).digest()
 
-            print('[', datetime.datetime.now(), '] Encrypt: Generated Key: ', cryptKey, ' Cipher text: ', qEncrypted)
+            print('[', datetime.datetime.now(), ' | Checkpoint 04] Encrypt: Generated Key: ', cryptKey, ' Cipher text: ', qEncrypted)
 
             qPayload = (
                 cryptKey,
@@ -111,12 +49,12 @@ class listener(StreamListener):
             qPayload = pickle.dumps(qPayload)
 
             #sending data
-            print('[', datetime.datetime.now(), '] Sending data: ', qPayload)
+            print('[', datetime.datetime.now(), ' | Checkpoint 05] Sending data: ', qPayload)
             s.send(qPayload)
 
             #receiving data
             aPayload = s.recv(size)
-            print('[', datetime.datetime.now(), '] Received data: ', aPayload)
+            print('[', datetime.datetime.now(), ' | Checkpoint 06] Received data: ', aPayload)
 
             #unpickle
             aPayload = pickle.loads(aPayload)
@@ -131,12 +69,12 @@ class listener(StreamListener):
             aDecrypted = f.decrypt(aPayload[0])
             aDecoded = aDecrypted.decode()
 
-            print('[', datetime.datetime.now(), '] Decrypt: Using Key: ', cryptKey, ' | Plain text: ', aDecoded)
+            print('[', datetime.datetime.now(), ' | Checkpoint 07] Decrypt: Using Key: ', cryptKey, ' | Plain text: ', aDecoded)
 
             #IBM watson speaking the answer
-            test_callback = MySynthesizeCallback()
-            service.synthesize_using_websocket(aDecoded,test_callback,accept='audio/wav',voice="en-US_AllisonVoice")
-            print('[', datetime.datetime.now(), '] Speaking Answer: ', aDecoded)
+            text_talker.say(aDecoded)
+            
+            print('[', datetime.datetime.now(), ' | Checkpoint 08] Speaking Answer: ', aDecoded)
 
             return True
 
@@ -160,19 +98,24 @@ port = args.sp
 size = args.z
 
 #IBM watson setup
-authenticator = IAMAuthenticator(apikeyWatson)
-service = TextToSpeechV1(authenticator=authenticator)
-service.set_service_url(urlWatson)
+config = TT_Config()
+config.API_KEY=apikeyWatson
+config.API_URL=urlWatson
+config.TTS_Voice = 'en-US_MichaelVoice'
+config.CACHE_DIRECTORY = 'custom_cache'
+config.INITIALIZATION_DELAY = 2
+
+text_talker = TextTalker(config=config)
 
 #connecting client to host server
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 s.connect((host,port))
-print('[', datetime.datetime.now(), '] Connecting to ', host, ' on port ', port)
+print('[', datetime.datetime.now(), ' | Checkpoint 01] Connecting to ', host, ' on port ', port)
 
 #twitter action
 auth = OAuthHandler(twitterCKey, twitterCSecret)
 auth.set_access_token(twitterAToken, twitterATokenSecret)
 twitterStream = Stream(auth, listener())
-print('[', datetime.datetime.now(), '] Listening for tweets from Twitter API that contain questions.')
+print('[', datetime.datetime.now(), ' | Checkpoint 02] Listening for tweets from Twitter API that contain questions.')
 twitterStream.filter(track=["#ECE4564T20"])
 s.close()
