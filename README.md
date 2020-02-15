@@ -22,7 +22,7 @@ For example, with a server IP of 192.168.1.134, a server port of 4444, and a soc
 python3 client.py -sip 192.168.1.134 -sp 4444 -z 1024 
 
 #### Server:
-Server initialization is don in the command line as in the below format:
+Server initialization is done in the command line as in the below format:
 python3 server.py -sp <SERVER_PORT> -z <SOCKET_SIZE>
 
 So, with the above example values, initialization would look like:
